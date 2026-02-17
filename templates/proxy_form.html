@@ -1,34 +1,34 @@
 {% extends "base.html" %}
-{% block title %}{{ 'Edit' if proxy else 'Add' }} Proxy - AppleID Auto Lite{% endblock %}
+{% block title %}{{ '编辑' if proxy else '添加' }}代理 - AppleID Auto Lite{% endblock %}
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-6">
-        <h4 class="mb-3">{{ 'Edit' if proxy else 'Add' }} Proxy</h4>
+        <h4 class="mb-3">{{ '编辑' if proxy else '添加' }}代理</h4>
         <form method="post">
             <div class="mb-3">
-                <label class="form-label">Protocol</label>
+                <label class="form-label">协议</label>
                 <select name="protocol" class="form-select">
                     {% for p in ['http', 'socks5', 'http+url', 'socks5+url'] %}
                     <option value="{{ p }}" {{ 'selected' if proxy and proxy.protocol == p else '' }}>{{ p }}</option>
                     {% endfor %}
                 </select>
-                <div class="form-text">Use "http+url" or "socks5+url" for dynamic proxy URL that returns IP:port.</div>
+                <div class="form-text">使用 "http+url" 或 "socks5+url" 来配置动态代理URL（返回 IP:端口）。</div>
             </div>
             <div class="mb-3">
-                <label class="form-label">Address</label>
-                <input type="text" name="content" class="form-control" required placeholder="IP:port or URL"
+                <label class="form-label">地址</label>
+                <input type="text" name="content" class="form-control" required placeholder="IP:端口 或 URL"
                        value="{{ proxy.content if proxy else '' }}">
             </div>
             <div class="mb-3">
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" name="enabled" value="1"
                            {{ 'checked' if (proxy and proxy.enabled) or not proxy else '' }}>
-                    <label class="form-check-label">Enabled</label>
+                    <label class="form-check-label">启用</label>
                 </div>
             </div>
             <div class="d-flex gap-2">
-                <button type="submit" class="btn btn-primary">Save</button>
-                <a href="{{ url_for('proxy_list') }}" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">保存</button>
+                <a href="{{ url_for('proxy_list') }}" class="btn btn-secondary">取消</a>
             </div>
         </form>
     </div>

@@ -1,17 +1,17 @@
 {% extends "base.html" %}
-{% block title %}Records - AppleID Auto Lite{% endblock %}
+{% block title %}任务记录 - AppleID Auto Lite{% endblock %}
 {% block content %}
-<h4 class="mb-3">Task Records</h4>
+<h4 class="mb-3">任务记录</h4>
 <div class="table-responsive">
     <table class="table table-hover">
         <thead class="table-dark">
             <tr>
                 <th>ID</th>
-                <th>Account</th>
-                <th>Status</th>
-                <th>Message</th>
+                <th>账号</th>
+                <th>状态</th>
+                <th>消息</th>
                 <th>IP</th>
-                <th>Time</th>
+                <th>时间</th>
             </tr>
         </thead>
         <tbody>
@@ -21,9 +21,9 @@
                 <td>{{ r.username or r.account_id }}</td>
                 <td>
                     {% if r.status %}
-                    <span class="badge bg-success">Success</span>
+                    <span class="badge bg-success">成功</span>
                     {% else %}
-                    <span class="badge bg-danger">Failed</span>
+                    <span class="badge bg-danger">失败</span>
                     {% endif %}
                 </td>
                 <td>{{ r.message or '' }}</td>
@@ -32,7 +32,7 @@
             </tr>
             {% endfor %}
             {% if not records.items %}
-            <tr><td colspan="6" class="text-center text-muted">No records yet.</td></tr>
+            <tr><td colspan="6" class="text-center text-muted">暂无记录。</td></tr>
             {% endif %}
         </tbody>
     </table>

@@ -1,33 +1,33 @@
 {% extends "base.html" %}
-{% block title %}{{ 'Edit' if account else 'Add' }} Account - AppleID Auto Lite{% endblock %}
+{% block title %}{{ '编辑' if account else '添加' }}账号 - AppleID Auto Lite{% endblock %}
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-8">
-        <h4 class="mb-3">{{ 'Edit' if account else 'Add' }} Account</h4>
+        <h4 class="mb-3">{{ '编辑' if account else '添加' }}账号</h4>
         <form method="post">
             <div class="card mb-3">
-                <div class="card-header">Account Info</div>
+                <div class="card-header">账号信息</div>
                 <div class="card-body">
                     <div class="row mb-3">
                         <div class="col-md-6">
-                            <label class="form-label">Apple ID (Email)</label>
+                            <label class="form-label">Apple ID (邮箱)</label>
                             <input type="text" name="username" class="form-control" required
                                    value="{{ account.username if account else '' }}">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Password</label>
+                            <label class="form-label">密码</label>
                             <input type="text" name="password" class="form-control" required
                                    value="{{ account.password if account else '' }}">
                         </div>
                     </div>
                     <div class="row mb-3">
                         <div class="col-md-6">
-                            <label class="form-label">Date of Birth</label>
+                            <label class="form-label">出生日期</label>
                             <input type="date" name="dob" class="form-control" required
                                    value="{{ account.dob if account else '' }}">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Remark</label>
+                            <label class="form-label">备注</label>
                             <input type="text" name="remark" class="form-control"
                                    value="{{ account.remark if account else '' }}">
                         </div>
@@ -36,17 +36,17 @@
             </div>
 
             <div class="card mb-3">
-                <div class="card-header">Security Questions</div>
+                <div class="card-header">安全问题</div>
                 <div class="card-body">
                     {% for i in range(1, 4) %}
                     <div class="row mb-3">
                         <div class="col-md-6">
-                            <label class="form-label">Question {{ i }}</label>
+                            <label class="form-label">问题 {{ i }}</label>
                             <input type="text" name="question{{ i }}" class="form-control" required
                                    value="{{ account['question' ~ i] if account else '' }}">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Answer {{ i }}</label>
+                            <label class="form-label">答案 {{ i }}</label>
                             <input type="text" name="answer{{ i }}" class="form-control" required
                                    value="{{ account['answer' ~ i] if account else '' }}">
                         </div>
@@ -56,18 +56,18 @@
             </div>
 
             <div class="card mb-3">
-                <div class="card-header">Settings</div>
+                <div class="card-header">设置</div>
                 <div class="card-body">
                     <div class="row mb-3">
                         <div class="col-md-4">
-                            <label class="form-label">Check Interval (min)</label>
+                            <label class="form-label">检测间隔（分钟）</label>
                             <input type="number" name="check_interval" class="form-control" min="1"
                                    value="{{ account.check_interval if account else 30 }}">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Proxy</label>
+                            <label class="form-label">代理</label>
                             <select name="proxy_id" class="form-select">
-                                <option value="">None</option>
+                                <option value="">无</option>
                                 {% for p in proxies %}
                                 <option value="{{ p.id }}"
                                     {{ 'selected' if account and account.proxy_id == p.id else '' }}>
@@ -78,9 +78,9 @@
                         </div>
                         <div class="col-md-4">
                             {% if account %}
-                            <label class="form-label">Status</label>
+                            <label class="form-label">状态</label>
                             <input type="text" class="form-control" disabled
-                                   value="{{ account.message or 'N/A' }}">
+                                   value="{{ account.message or '无' }}">
                             {% endif %}
                         </div>
                     </div>
@@ -89,27 +89,27 @@
                             <div class="form-check form-check-inline">
                                 <input class="form-check-input" type="checkbox" name="enable_check_password_correct" value="1"
                                        {{ 'checked' if account and account.enable_check_password_correct else '' }}>
-                                <label class="form-check-label">Check Password</label>
+                                <label class="form-check-label">检查密码</label>
                             </div>
                             <div class="form-check form-check-inline">
                                 <input class="form-check-input" type="checkbox" name="enable_delete_devices" value="1"
                                        {{ 'checked' if account and account.enable_delete_devices else '' }}>
-                                <label class="form-check-label">Delete Devices</label>
+                                <label class="form-check-label">删除设备</label>
                             </div>
                             <div class="form-check form-check-inline">
                                 <input class="form-check-input" type="checkbox" name="enable_auto_update_password" value="1"
                                        {{ 'checked' if account and account.enable_auto_update_password else '' }}>
-                                <label class="form-check-label">Auto Update Password</label>
+                                <label class="form-check-label">自动更新密码</label>
                             </div>
                             <div class="form-check form-check-inline">
                                 <input class="form-check-input" type="checkbox" name="fail_retry" value="1"
                                        {{ 'checked' if (account and account.fail_retry) or not account else '' }}>
-                                <label class="form-check-label">Fail Retry</label>
+                                <label class="form-check-label">失败重试</label>
                             </div>
                             <div class="form-check form-check-inline">
                                 <input class="form-check-input" type="checkbox" name="enabled" value="1"
                                        {{ 'checked' if (account and account.enabled) or not account else '' }}>
-                                <label class="form-check-label">Enabled</label>
+                                <label class="form-check-label">启用</label>
                             </div>
                         </div>
                     </div>
@@ -117,8 +117,8 @@
             </div>
 
             <div class="d-flex gap-2">
-                <button type="submit" class="btn btn-primary">Save</button>
-                <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">保存</button>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">取消</a>
             </div>
         </form>
     </div>

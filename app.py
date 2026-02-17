@@ -20,6 +20,9 @@ def create_app():
     cfg = AppConfig()
     app.secret_key = cfg.SECRET_KEY
 
+    # Ensure data directory exists before logging setup
+    os.makedirs(cfg.DATA_DIR, exist_ok=True)
+
     # Logging
     logging.basicConfig(
         level=getattr(logging, cfg.LOG_LEVEL, logging.INFO),
@@ -33,7 +36,6 @@ def create_app():
     logger = logging.getLogger(__name__)
 
     # Initialize components
-    os.makedirs(cfg.DATA_DIR, exist_ok=True)
     db = Database(cfg.DATABASE_PATH)
     ocr = ddddocr.DdddOcr(show_ad=False)
 
@@ -76,7 +78,7 @@ def create_app():
             if password == admin_pw:
                 session["authenticated"] = True
                 return redirect(url_for("dashboard"))
-            flash("Password incorrect", "danger")
+            flash("密码错误", "danger")
         return render_template("login.html")
 
     @app.route("/logout")
@@ -99,7 +101,7 @@ def create_app():
         if request.method == "POST":
             data = _parse_account_form(request.form)
             db.create_account(data)
-            flash("Account added", "success")
+            flash("账号添加成功", "success")
             return redirect(url_for("dashboard"))
         proxies = db.list_proxies()
         return render_template("account_form.html", account=None, proxies=proxies)
@@ -110,11 +112,11 @@ def create_app():
         if request.method == "POST":
             data = _parse_account_form(request.form)
             db.update_account(account_id, data)
-            flash("Account updated", "success")
+            flash("账号更新成功", "success")
             return redirect(url_for("dashboard"))
         account = db.get_account(account_id)
         if not account:
-            flash("Account not found", "danger")
+            flash("账号未找到", "danger")
             return redirect(url_for("dashboard"))
         proxies = db.list_proxies()
         return render_template("account_form.html", account=account, proxies=proxies)
@@ -135,9 +137,9 @@ def create_app():
     @login_required
     def account_run(account_id):
         if scheduler.running:
-            return jsonify({"status": False, "message": "Scheduler is busy"})
+            return jsonify({"status": False, "message": "调度器正忙"})
         scheduler.trigger_now(account_id)
-        return jsonify({"status": True, "message": "Task triggered"})
+        return jsonify({"status": True, "message": "任务已触发"})
 
     # ── Proxy CRUD ──
 
@@ -153,7 +155,7 @@ def create_app():
         if request.method == "POST":
             data = _parse_proxy_form(request.form)
             db.create_proxy(data)
-            flash("Proxy added", "success")
+            flash("代理添加成功", "success")
             return redirect(url_for("proxy_list"))
         return render_template("proxy_form.html", proxy=None)
 
@@ -163,11 +165,11 @@ def create_app():
         if request.method == "POST":
             data = _parse_proxy_form(request.form)
             db.update_proxy(proxy_id, data)
-            flash("Proxy updated", "success")
+            flash("代理更新成功", "success")
             return redirect(url_for("proxy_list"))
         proxy = db.get_proxy(proxy_id)
         if not proxy:
-            flash("Proxy not found", "danger")
+            flash("代理未找到", "danger")
             return redirect(url_for("proxy_list"))
         return render_template("proxy_form.html", proxy=proxy)
 
@@ -204,7 +206,7 @@ def create_app():
                 if key == "headless":
                     value = "true" if request.form.get(key) else "false"
                 db.set_setting(key, value)
-            flash("Settings saved", "success")
+            flash("设置已保存", "success")
             return redirect(url_for("settings"))
         current = {key: db.get_setting(key) for key in setting_keys}
         return render_template("settings.html", settings=current)
@@ -213,8 +215,8 @@ def create_app():
     @login_required
     def test_notification():
         s = db.get_all_settings()
-        send_notification("Test", "Notification test from AppleID Auto Lite", s)
-        return jsonify({"status": True, "message": "Test notification sent"})
+        send_notification("测试", "AppleID Auto Lite 通知测试", s)
+        return jsonify({"status": True, "message": "测试通知已发送"})
 
     # ── API for dashboard auto-refresh ──
 

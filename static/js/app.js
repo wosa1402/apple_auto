@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', function() {
 
-    // Password show/hide toggle
+    // 密码显示/隐藏切换
     document.querySelectorAll('.btn-toggle-pw').forEach(function(btn) {
         btn.addEventListener('click', function() {
             var row = this.closest('td');
@@ -11,28 +11,28 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Delete account
+    // 删除账号
     document.querySelectorAll('.btn-delete').forEach(function(btn) {
         btn.addEventListener('click', function() {
-            if (!confirm('Delete this account?')) return;
+            if (!confirm('确定要删除此账号吗？')) return;
             var id = this.dataset.id;
             fetch('/account/' + id + '/delete', {method: 'POST'})
                 .then(function(r) { return r.json(); })
                 .then(function() { location.reload(); })
-                .catch(function() { alert('Delete failed'); });
+                .catch(function() { alert('删除失败'); });
         });
     });
 
-    // Toggle enable/disable
+    // 启用/禁用切换
     document.querySelectorAll('.btn-toggle-enable').forEach(function(cb) {
         cb.addEventListener('change', function() {
             var id = this.dataset.id;
             fetch('/account/' + id + '/toggle', {method: 'POST'})
-                .catch(function() { alert('Toggle failed'); });
+                .catch(function() { alert('切换失败'); });
         });
     });
 
-    // Run now
+    // 立即执行
     document.querySelectorAll('.btn-run-now').forEach(function(btn) {
         btn.addEventListener('click', function() {
             var id = this.dataset.id;
@@ -42,28 +42,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     if (data.status) {
-                        alert('Task triggered');
+                        alert('任务已触发');
                     } else {
-                        alert(data.message || 'Failed');
+                        alert(data.message || '执行失败');
                     }
                     self.disabled = false;
                 })
                 .catch(function() {
-                    alert('Failed');
+                    alert('执行失败');
                     self.disabled = false;
                 });
         });
     });
 
-    // Delete proxy
+    // 删除代理
     document.querySelectorAll('.btn-delete-proxy').forEach(function(btn) {
         btn.addEventListener('click', function() {
-            if (!confirm('Delete this proxy?')) return;
+            if (!confirm('确定要删除此代理吗？')) return;
             var id = this.dataset.id;
             fetch('/proxy/' + id + '/delete', {method: 'POST'})
                 .then(function(r) { return r.json(); })
                 .then(function() { location.reload(); })
-                .catch(function() { alert('Delete failed'); });
+                .catch(function() { alert('删除失败'); });
         });
     });
 
