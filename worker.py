@@ -252,6 +252,14 @@ class AppleIDAutomation:
                 continue
         return False
 
+    def _wait_for_page_transition(self, page_check_fn, timeout=8):
+        """Wait for a page to transition away (its elements become hidden/removed)."""
+        try:
+            WebDriverWait(self.driver, timeout).until(lambda d: not page_check_fn())
+            return True
+        except BaseException:
+            return False
+
     def _is_recovery_options_page(self):
         return self._has_any([
             (By.CSS_SELECTOR, "recovery-options"),
@@ -292,6 +300,10 @@ class AppleIDAutomation:
                 return "fail"
             if not self._click_action_button(timeout=5):
                 return "fail"
+            # Wait for recovery options page to transition away
+            if not self._wait_for_page_transition(self._is_recovery_options_page, timeout=10):
+                logger.warning("解锁流程: 恢复选项页面未完成跳转，等待后重试")
+                time.sleep(2)
             return "continue"
 
         if self._is_authentication_method_page():
@@ -306,6 +318,10 @@ class AppleIDAutomation:
                 return "fail"
             if not self._click_action_button(timeout=5):
                 return "fail"
+            # Wait for authentication method page to transition away
+            if not self._wait_for_page_transition(self._is_authentication_method_page, timeout=10):
+                logger.warning("解锁流程: 身份验证方式页面未完成跳转，等待后重试")
+                time.sleep(2)
             return "continue"
 
         if self._find_dob_input(timeout=1) is not None:
@@ -322,6 +338,8 @@ class AppleIDAutomation:
                 return "fail"
             if not self._click_action_button(timeout=3):
                 pass
+            # Wait for reset options page to transition away
+            self._wait_for_page_transition(self._is_reset_options_page, timeout=8)
             return "continue"
 
         if self._is_reset_password_page():
@@ -329,19 +347,49 @@ class AppleIDAutomation:
 
         return "unknown"
 
-    def _run_password_reset_flow(self, max_steps=10):
-        for _ in range(max_steps):
+    def _run_password_reset_flow(self, max_steps=12):
+        last_page = None
+        repeat_count = 0
+        for step in range(max_steps):
+            # Detect current page type for stale detection
+            current_page = None
+            if self._is_recovery_options_page():
+                current_page = "recovery_options"
+            elif self._is_authentication_method_page():
+                current_page = "authentication_method"
+            elif self._find_dob_input(timeout=0) is not None:
+                current_page = "dob"
+            elif self._is_security_questions_page():
+                current_page = "security_questions"
+            elif self._is_reset_options_page():
+                current_page = "reset_options"
+            elif self._is_reset_password_page():
+                current_page = "reset_password"
+
+            # If we're seeing the same page again, the transition didn't complete
+            if current_page and current_page == last_page:
+                repeat_count += 1
+                if repeat_count >= 3:
+                    logger.warning(f"解锁流程: 页面 {current_page} 连续重复 {repeat_count} 次，放弃")
+                    return False
+                logger.info(f"解锁流程: 页面 {current_page} 仍在显示，等待跳转... (第{repeat_count}次)")
+                time.sleep(3)
+                continue
+            else:
+                repeat_count = 0
+                last_page = current_page
+
             step_state = self._advance_unlock_flow_step()
             if step_state == "done":
                 return True
             if step_state == "continue":
-                time.sleep(1)
+                time.sleep(2)
                 continue
             if step_state == "fail":
                 return False
 
             if self._click_action_button(timeout=2):
-                time.sleep(1)
+                time.sleep(2)
                 continue
             if self.check():
                 return True
