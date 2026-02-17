@@ -1171,6 +1171,8 @@ class AppleIDAutomation:
 
 def setup_driver(config):
     """Create and return a Chrome WebDriver instance."""
+    from env_check import find_chrome, find_chromedriver
+
     options = webdriver.ChromeOptions()
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-gpu")
@@ -1183,9 +1185,14 @@ def setup_driver(config):
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option("useAutomationExtension", False)
+
+    # Auto-detect Chrome binary
     chrome_binary = os.environ.get("CHROME_BINARY", "").strip()
+    if not chrome_binary:
+        chrome_binary = find_chrome() or ""
     if chrome_binary:
         options.binary_location = chrome_binary
+
     if config.headless:
         options.add_argument("--headless=new")
     if config.proxy:
@@ -1202,16 +1209,22 @@ def setup_driver(config):
         if config.webdriver != "local":
             driver = webdriver.Remote(command_executor=config.webdriver, options=options)
         else:
+            # Auto-detect chromedriver
             chromedriver = os.environ.get("CHROMEDRIVER", "").strip()
+            if not chromedriver:
+                chromedriver = find_chromedriver() or ""
             if chromedriver:
                 from selenium.webdriver.chrome.service import Service as ChromeService
                 service = ChromeService(executable_path=chromedriver)
                 driver = webdriver.Chrome(service=service, options=options)
             else:
+                # Let Selenium Manager handle it (Selenium 4.6+)
                 driver = webdriver.Chrome(options=options)
         driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
     except BaseException as e:
-        logger.error(f"WebDriver setup failed: {e}")
+        logger.error(f"WebDriver 启动失败: {e}")
+        if config.webdriver == "local" and not chrome_binary:
+            logger.error("未检测到 Chrome 浏览器，请安装 Chrome 或在「系统设置」中配置远程 WebDriver URL")
         return None
     else:
         driver.set_page_load_timeout(30)

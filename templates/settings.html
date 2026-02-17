@@ -54,6 +54,26 @@
             <div class="card mb-3">
                 <div class="card-header">WebDriver 设置</div>
                 <div class="card-body">
+                    {% if env_status %}
+                    <div class="mb-3">
+                        <label class="form-label">环境状态</label>
+                        <div>
+                            {% if env_status.ready %}
+                            <span class="badge bg-success">就绪</span>
+                            <span class="text-muted ms-2">{{ env_status.message }}</span>
+                            {% else %}
+                            <span class="badge bg-danger">未就绪</span>
+                            <span class="text-danger ms-2">{{ env_status.message.split('\n')[0] }}</span>
+                            {% endif %}
+                            <button type="button" class="btn btn-outline-secondary btn-sm ms-2" id="btn-recheck-env">
+                                重新检测
+                            </button>
+                        </div>
+                        {% if env_status.chrome_path %}
+                        <div class="form-text">Chrome 路径: {{ env_status.chrome_path }}</div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
                     <div class="row mb-3">
                         <div class="col-md-8">
                             <label class="form-label">WebDriver URL</label>
@@ -96,5 +116,29 @@
             .then(data => alert(data.message || '已发送'))
             .catch(() => alert('发送失败'));
     });
+
+    var recheckBtn = document.getElementById('btn-recheck-env');
+    if (recheckBtn) {
+        recheckBtn.addEventListener('click', function() {
+            this.disabled = true;
+            this.textContent = '检测中...';
+            var self = this;
+            fetch('/settings/recheck_env', {method: 'POST'})
+                .then(r => r.json())
+                .then(function(data) {
+                    if (data.env && data.env.ready) {
+                        alert('环境检测通过: ' + data.env.message);
+                    } else if (data.env) {
+                        alert('环境异常: ' + data.env.message);
+                    }
+                    location.reload();
+                })
+                .catch(function() {
+                    alert('检测失败');
+                    self.disabled = false;
+                    self.textContent = '重新检测';
+                });
+        });
+    }
 </script>
 {% endblock %}

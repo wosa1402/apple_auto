@@ -7,6 +7,7 @@ import urllib3
 from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 
 from config import Config as AppConfig
+from env_check import check_environment
 from lang import en_us, vi_vn, zh_cn
 from models import Database
 from notifier import send_notification
@@ -38,6 +39,28 @@ def create_app():
     # Initialize components
     db = Database(cfg.DATABASE_PATH)
     ocr = ddddocr.DdddOcr(show_ad=False)
+
+    # Check WebDriver environment
+    webdriver_url_cfg = cfg.WEBDRIVER_URL
+    if webdriver_url_cfg and webdriver_url_cfg != "local":
+        env_status = {
+            "ready": True,
+            "message": f"使用远程 WebDriver: {webdriver_url_cfg}",
+            "chrome_ok": True,
+            "driver_ok": True,
+            "chrome_path": None,
+            "chromedriver_path": None,
+            "auto_installed": False,
+        }
+        logger.info(env_status["message"])
+    else:
+        logger.info("正在检测本地 WebDriver 环境...")
+        env_status = check_environment()
+        if env_status["ready"]:
+            logger.info(f"WebDriver 环境就绪: {env_status['message']}")
+        else:
+            logger.warning(f"WebDriver 环境异常: {env_status['message']}")
+    app.config["ENV_STATUS"] = env_status
 
     lang_map = {"zh_cn": zh_cn, "en_us": en_us, "vi_vn": vi_vn}
     lang_cls = lang_map.get(cfg.LANG, zh_cn)
@@ -91,7 +114,12 @@ def create_app():
     def dashboard():
         accounts = db.list_accounts()
         sched_status = scheduler.get_status()
-        return render_template("dashboard.html", accounts=accounts, scheduler=sched_status)
+        env = app.config.get("ENV_STATUS", {})
+        # Also check if user configured remote WebDriver in settings
+        wd_url = db.get_setting("webdriver_url", "local")
+        if wd_url and wd_url != "local":
+            env = dict(env, ready=True, message=f"使用远程 WebDriver: {wd_url}")
+        return render_template("dashboard.html", accounts=accounts, scheduler=sched_status, env_status=env)
 
     # ── Account CRUD ──
 
@@ -209,7 +237,8 @@ def create_app():
             flash("设置已保存", "success")
             return redirect(url_for("settings"))
         current = {key: db.get_setting(key) for key in setting_keys}
-        return render_template("settings.html", settings=current)
+        env = app.config.get("ENV_STATUS", {})
+        return render_template("settings.html", settings=current, env_status=env)
 
     @app.route("/settings/test_notification", methods=["POST"])
     @login_required
@@ -217,6 +246,22 @@ def create_app():
         s = db.get_all_settings()
         send_notification("测试", "AppleID Auto Lite 通知测试", s)
         return jsonify({"status": True, "message": "测试通知已发送"})
+
+    @app.route("/settings/recheck_env", methods=["POST"])
+    @login_required
+    def recheck_env():
+        wd_url = db.get_setting("webdriver_url", "local")
+        if wd_url and wd_url != "local":
+            env = {
+                "ready": True,
+                "message": f"使用远程 WebDriver: {wd_url}",
+                "chrome_ok": True,
+                "driver_ok": True,
+            }
+        else:
+            env = check_environment()
+        app.config["ENV_STATUS"] = env
+        return jsonify({"status": True, "env": env})
 
     # ── API for dashboard auto-refresh ──
 
