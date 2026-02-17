@@ -6,6 +6,26 @@ import subprocess
 logger = logging.getLogger(__name__)
 
 
+def _sudo_prefix():
+    """Return ['sudo'] if sudo is available and we're not root, else []."""
+    if os.geteuid() == 0:
+        return []
+    if shutil.which("sudo"):
+        return ["sudo"]
+    return []
+
+
+def _run(cmd, timeout=120, shell=False):
+    """Run a command with optional sudo prefix."""
+    if isinstance(cmd, list):
+        cmd = _sudo_prefix() + cmd
+    elif shell and _sudo_prefix():
+        cmd = "sudo " + cmd
+    return subprocess.run(
+        cmd, check=True, capture_output=True, timeout=timeout, shell=shell,
+    )
+
+
 def find_chrome():
     """Try to find Chrome/Chromium binary on the system."""
     names = [
@@ -59,61 +79,54 @@ def try_install_chrome():
     # Try apt (Debian/Ubuntu)
     if shutil.which("apt-get"):
         try:
-            subprocess.run(
-                ["apt-get", "update", "-qq"],
-                check=True, capture_output=True, timeout=120,
-            )
-            # Try installing chromium first (lighter, more available)
+            _run(["apt-get", "update", "-qq"], timeout=120)
+
+            # Try Google Chrome via direct download (most compatible)
             try:
-                subprocess.run(
-                    ["apt-get", "install", "-y", "-qq", "chromium-browser"],
-                    check=True, capture_output=True, timeout=300,
+                _run(["apt-get", "install", "-y", "-qq", "wget", "gnupg"], timeout=120)
+                _run(
+                    "wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb",
+                    shell=True, timeout=120,
                 )
+                _run(["apt-get", "install", "-y", "-qq", "/tmp/chrome.deb"], timeout=300)
+                subprocess.run(["rm", "-f", "/tmp/chrome.deb"], capture_output=True)
+                logger.info("Google Chrome 安装成功")
+                return True
+            except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                logger.info(f"直接下载 Chrome 失败，尝试其他方式: {e}")
+                # Try to fix broken dependencies
+                try:
+                    _run(["apt-get", "install", "-f", "-y", "-qq"], timeout=120)
+                    if find_chrome():
+                        logger.info("Google Chrome 安装成功（已修复依赖）")
+                        return True
+                except Exception:
+                    pass
+
+            # Try installing chromium as fallback
+            try:
+                _run(["apt-get", "install", "-y", "-qq", "chromium-browser"], timeout=300)
                 logger.info("Chromium 安装成功")
                 return True
             except (subprocess.CalledProcessError, FileNotFoundError):
                 pass
 
-            # Try Google Chrome via direct download
+            # Try chromium package name (varies by distro)
             try:
-                subprocess.run(
-                    ["apt-get", "install", "-y", "-qq", "wget", "gnupg"],
-                    check=True, capture_output=True, timeout=120,
-                )
-                subprocess.run(
-                    "wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb",
-                    shell=True, check=True, capture_output=True, timeout=120,
-                )
-                subprocess.run(
-                    ["apt-get", "install", "-y", "-qq", "/tmp/chrome.deb"],
-                    check=True, capture_output=True, timeout=300,
-                )
-                subprocess.run(["rm", "-f", "/tmp/chrome.deb"], capture_output=True)
-                logger.info("Google Chrome 安装成功")
+                _run(["apt-get", "install", "-y", "-qq", "chromium"], timeout=300)
+                logger.info("Chromium 安装成功")
                 return True
-            except (subprocess.CalledProcessError, FileNotFoundError) as e:
-                logger.warning(f"通过 apt 安装 Chrome 失败: {e}")
-                # Try to fix broken dependencies
-                try:
-                    subprocess.run(
-                        ["apt-get", "install", "-f", "-y", "-qq"],
-                        check=True, capture_output=True, timeout=120,
-                    )
-                    logger.info("Google Chrome 安装成功（已修复依赖）")
-                    return find_chrome() is not None
-                except Exception:
-                    pass
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                pass
+
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
-            logger.warning(f"apt-get 不可用或更新失败: {e}")
+            logger.warning(f"apt-get 更新失败: {e}")
 
     # Try yum/dnf (RHEL/CentOS/Fedora)
     pkg_mgr = shutil.which("dnf") or shutil.which("yum")
     if pkg_mgr:
         try:
-            subprocess.run(
-                [pkg_mgr, "install", "-y", "chromium"],
-                check=True, capture_output=True, timeout=300,
-            )
+            _run([pkg_mgr, "install", "-y", "chromium"], timeout=300)
             logger.info("Chromium 安装成功")
             return True
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
@@ -139,10 +152,7 @@ def try_install_chromedriver():
     # Fallback: try to install via apt
     if shutil.which("apt-get"):
         try:
-            subprocess.run(
-                ["apt-get", "install", "-y", "-qq", "chromium-chromedriver"],
-                check=True, capture_output=True, timeout=300,
-            )
+            _run(["apt-get", "install", "-y", "-qq", "chromium-chromedriver"], timeout=300)
             logger.info("ChromeDriver 安装成功")
             return True
         except Exception:
