@@ -1,0 +1,6 @@
+flask>=3.0
+apscheduler>=3.10
+selenium>=4.15
+ddddocr>=1.5.2,<1.6.0
+requests>=2.31
+python-dotenv>=1.0

@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - AppleID Auto Lite{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">Accounts
+        {% if scheduler.running %}
+        <span class="badge bg-warning text-dark ms-2">Running: {{ scheduler.current_account or '...' }}</span>
+        {% else %}
+        <span class="badge bg-secondary ms-2">Idle</span>
+        {% endif %}
+    </h4>
+    <a href="{{ url_for('account_add') }}" class="btn btn-primary btn-sm">+ Add Account</a>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-hover" id="accounts-table">
+        <thead class="table-dark">
+            <tr>
+                <th>ID</th>
+                <th>Username</th>
+                <th>Password</th>
+                <th>Remark</th>
+                <th>Status</th>
+                <th>Last Check</th>
+                <th>Interval</th>
+                <th>Enabled</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for account in accounts %}
+            <tr data-id="{{ account.id }}">
+                <td>{{ account.id }}</td>
+                <td>{{ account.username }}</td>
+                <td>
+                    <span class="pw-mask">********</span>
+                    <span class="pw-text d-none">{{ account.password }}</span>
+                    <button class="btn btn-sm btn-outline-secondary btn-toggle-pw" type="button" title="Show/Hide">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M10.5 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"/><path d="M0 8s3-5.5 8-5.5S16 8 16 8s-3 5.5-8 5.5S0 8 0 8zm8 3.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/></svg>
+                    </button>
+                </td>
+                <td>{{ account.remark or '' }}</td>
+                <td>
+                    {% set msg = account.message or '' %}
+                    {% if msg in ['', 'Pending'] %}
+                    <span class="badge bg-info">Pending</span>
+                    {% elif msg in ['Normal', '\u6b63\u5e38'] %}
+                    <span class="badge bg-success">{{ msg }}</span>
+                    {% else %}
+                    <span class="badge bg-danger" title="{{ msg }}">{{ msg[:30] }}</span>
+                    {% endif %}
+                </td>
+                <td>{{ account.last_check if account.last_check != '2000-01-01 00:00:00' else '-' }}</td>
+                <td>{{ account.check_interval }}m</td>
+                <td>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input btn-toggle-enable" type="checkbox"
+                               data-id="{{ account.id }}" {{ 'checked' if account.enabled else '' }}>
+                    </div>
+                </td>
+                <td class="text-nowrap">
+                    <button class="btn btn-sm btn-outline-success btn-run-now" data-id="{{ account.id }}" title="Run Now">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>
+                    </button>
+                    <a href="{{ url_for('account_edit', account_id=account.id) }}" class="btn btn-sm btn-outline-primary" title="Edit">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10z"/></svg>
+                    </a>
+                    <button class="btn btn-sm btn-outline-danger btn-delete" data-id="{{ account.id }}" title="Delete">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+            {% if not accounts %}
+            <tr><td colspan="9" class="text-center text-muted">No accounts yet. Click "Add Account" to get started.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+    // Auto-refresh dashboard every 30s
+    setInterval(function() {
+        fetch('/api/status')
+            .then(r => r.json())
+            .then(data => {
+                // Reload page to refresh data (simple approach)
+                location.reload();
+            })
+            .catch(() => {});
+    }, 30000);
+</script>
+{% endblock %}

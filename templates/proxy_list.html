@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Proxies - AppleID Auto Lite{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">Proxies</h4>
+    <a href="{{ url_for('proxy_add') }}" class="btn btn-primary btn-sm">+ Add Proxy</a>
+</div>
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead class="table-dark">
+            <tr>
+                <th>ID</th>
+                <th>Protocol</th>
+                <th>Address</th>
+                <th>Enabled</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in proxies %}
+            <tr>
+                <td>{{ p.id }}</td>
+                <td><span class="badge bg-info">{{ p.protocol }}</span></td>
+                <td>{{ p.content }}</td>
+                <td>
+                    {% if p.enabled %}
+                    <span class="badge bg-success">Yes</span>
+                    {% else %}
+                    <span class="badge bg-secondary">No</span>
+                    {% endif %}
+                </td>
+                <td class="text-nowrap">
+                    <a href="{{ url_for('proxy_edit', proxy_id=p.id) }}" class="btn btn-sm btn-outline-primary">Edit</a>
+                    <button class="btn btn-sm btn-outline-danger btn-delete-proxy" data-id="{{ p.id }}">Delete</button>
+                </td>
+            </tr>
+            {% endfor %}
+            {% if not proxies %}
+            <tr><td colspan="5" class="text-center text-muted">No proxies configured.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

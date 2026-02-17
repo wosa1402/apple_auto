@@ -1,0 +1,36 @@
+body {
+    background-color: #f8f9fa;
+}
+
+.card {
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+
+.badge {
+    font-weight: 500;
+}
+
+.pw-mask, .pw-text {
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+.btn-toggle-pw {
+    padding: 0 4px;
+    border: none;
+    vertical-align: baseline;
+}
+
+.table td {
+    vertical-align: middle;
+}
+
+.form-check-inline {
+    margin-bottom: 0.5rem;
+}
+
+@media (max-width: 768px) {
+    .table-responsive {
+        font-size: 0.85em;
+    }
+}

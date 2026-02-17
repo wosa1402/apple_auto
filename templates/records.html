@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Records - AppleID Auto Lite{% endblock %}
+{% block content %}
+<h4 class="mb-3">Task Records</h4>
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead class="table-dark">
+            <tr>
+                <th>ID</th>
+                <th>Account</th>
+                <th>Status</th>
+                <th>Message</th>
+                <th>IP</th>
+                <th>Time</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in records.items %}
+            <tr>
+                <td>{{ r.id }}</td>
+                <td>{{ r.username or r.account_id }}</td>
+                <td>
+                    {% if r.status %}
+                    <span class="badge bg-success">Success</span>
+                    {% else %}
+                    <span class="badge bg-danger">Failed</span>
+                    {% endif %}
+                </td>
+                <td>{{ r.message or '' }}</td>
+                <td>{{ r.ip or '' }}</td>
+                <td>{{ r.created_at }}</td>
+            </tr>
+            {% endfor %}
+            {% if not records.items %}
+            <tr><td colspan="6" class="text-center text-muted">No records yet.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+{% if records.total_pages > 1 %}
+<nav>
+    <ul class="pagination justify-content-center">
+        {% for p in range(1, records.total_pages + 1) %}
+        <li class="page-item {{ 'active' if p == records.page else '' }}">
+            <a class="page-link" href="?page={{ p }}">{{ p }}</a>
+        </li>
+        {% endfor %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}
