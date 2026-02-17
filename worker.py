@@ -211,9 +211,12 @@ class AppleIDAutomation:
 
     def _find_dob_input(self, timeout=5):
         locators = [
+            (By.CSS_SELECTOR, "masked-date#birthDate input"),
+            (By.CSS_SELECTOR, "#birthDate input.date-input"),
             (By.CSS_SELECTOR, "masked-date input"),
             (By.XPATH, "//masked-date//input"),
             (By.XPATH, "//form-fragment-birthday//input"),
+            (By.CSS_SELECTOR, "input.date-input.form-textbox-input"),
             (By.CLASS_NAME, "date-input"),
         ]
         try:
@@ -238,10 +241,13 @@ class AppleIDAutomation:
         return self._click_first(locators, timeout=timeout)
 
     def _has_any(self, locators):
+        """Check if any locator matches a VISIBLE element on the page."""
         for by, selector in locators:
             try:
-                if len(self.driver.find_elements(by, selector)) > 0:
-                    return True
+                elements = self.driver.find_elements(by, selector)
+                for el in elements:
+                    if el.is_displayed():
+                        return True
             except BaseException:
                 continue
         return False
@@ -281,6 +287,7 @@ class AppleIDAutomation:
 
     def _advance_unlock_flow_step(self):
         if self._is_recovery_options_page():
+            logger.info("解锁流程: 检测到恢复选项页面")
             if not self._click_reset_password_option(timeout=5):
                 return "fail"
             if not self._click_action_button(timeout=5):
@@ -288,6 +295,7 @@ class AppleIDAutomation:
             return "continue"
 
         if self._is_authentication_method_page():
+            logger.info("解锁流程: 检测到身份验证方式页面")
             if not self._click_first([
                 (By.ID, "optionquestions"),
                 (By.CSS_SELECTOR, "input[name='device'][value='questions']"),
@@ -301,12 +309,15 @@ class AppleIDAutomation:
             return "continue"
 
         if self._find_dob_input(timeout=1) is not None:
+            logger.info("解锁流程: 检测到出生日期页面")
             return "continue" if self.process_dob() else "fail"
 
         if self._is_security_questions_page():
+            logger.info("解锁流程: 检测到安全问题页面")
             return "continue" if self.process_security_question() else "fail"
 
         if self._is_reset_options_page():
+            logger.info("解锁流程: 检测到重置选项页面")
             if not self._click_reset_password_option(timeout=5):
                 return "fail"
             if not self._click_action_button(timeout=3):
@@ -972,13 +983,15 @@ class AppleIDAutomation:
             input_box = self._find_dob_input(timeout=8)
             if input_box is None:
                 raise RuntimeError("DOB input not found")
+            logger.info(f"DOB 输入框已找到，tag={input_box.tag_name}, displayed={input_box.is_displayed()}")
             try:
                 WebDriverWait(self.driver, 8).until(EC.presence_of_element_located((By.ID, "action")))
             except BaseException:
-                pass
+                logger.warning("未找到 action 按钮，继续尝试填写 DOB")
 
             order = detect_format_order()
             dob_date = parse_dob(order)
+            logger.info(f"DOB 格式: {order}, 解析结果: {dob_date}")
 
             if order == "dmy":
                 candidates = [
@@ -992,10 +1005,13 @@ class AppleIDAutomation:
                 ]
 
             for candidate in candidates:
+                logger.info(f"尝试填写 DOB: {candidate}")
                 clear_and_type(input_box, candidate)
                 try:
                     WebDriverWait(self.driver, 8).until(lambda d: is_action_enabled())
+                    logger.info("Continue 按钮已启用")
                 except BaseException:
+                    logger.warning(f"Continue 按钮未启用，尝试下一个格式")
                     continue
 
                 if not self._click_action_button(timeout=4):
@@ -1041,7 +1057,8 @@ class AppleIDAutomation:
                 logger.error(self.lang.DOB_Error)
             self.callbacks.update_message(self.username, self.lang.DOB_Error)
             return False
-        except BaseException:
+        except BaseException as e:
+            logger.error(f"process_dob 异常: {e}")
             return False
 
     def process_security_question(self):
