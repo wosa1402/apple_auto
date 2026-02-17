@@ -228,7 +228,7 @@ def check_environment():
         result["message"] = (
             "本地未检测到 Chrome 浏览器且自动安装失败。\n"
             "请选择以下方式之一：\n"
-            "1. 手动安装 Chrome 浏览器\n"
+            "1. 在终端手动运行: sudo apt-get update && sudo apt-get install -y google-chrome-stable\n"
             "2. 在「系统设置」中配置远程 WebDriver URL"
         )
 
