@@ -640,6 +640,13 @@ class AppleIDAutomation:
         page_loaded = False
         for attempt in range(3):
             try:
+                # Navigate to blank page first to reset renderer state
+                if attempt > 0:
+                    try:
+                        self.driver.get("about:blank")
+                        time.sleep(2)
+                    except BaseException:
+                        pass
                 self.driver.get("https://account.apple.com/sign-in")
                 page_loaded = True
                 break
@@ -1322,7 +1329,7 @@ def setup_driver(config):
             logger.error("未检测到 Chrome 浏览器，请安装 Chrome 或在「系统设置」中配置远程 WebDriver URL")
         return None
     else:
-        driver.set_page_load_timeout(30)
+        driver.set_page_load_timeout(60)
         return driver
 
 
