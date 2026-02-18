@@ -397,15 +397,24 @@ class AppleIDAutomation:
         return False
 
     def refresh(self):
-        try:
-            self.driver.get("https://iforgot.apple.com/password/verify/appleid?language=en_US")
+        # Retry page load up to 2 times for intermittent failures
+        loaded = False
+        for attempt in range(2):
             try:
-                self.driver.switch_to.alert.accept()
+                self.driver.get("https://iforgot.apple.com/password/verify/appleid?language=en_US")
+                try:
+                    self.driver.switch_to.alert.accept()
+                except BaseException:
+                    pass
+                WebDriverWait(self.driver, 15).until(
+                    EC.presence_of_element_located((By.CLASS_NAME, "iforgot-apple-id")))
+                loaded = True
+                break
             except BaseException:
-                pass
-            WebDriverWait(self.driver, 10).until(
-                EC.presence_of_element_located((By.CLASS_NAME, "iforgot-apple-id")))
-        except BaseException:
+                if attempt == 0:
+                    logger.warning("iforgot 页面加载失败，正在重试...")
+                    time.sleep(3)
+        if not loaded:
             logger.error(self.lang.failOnRefreshingPage)
             if self.config.proxy != "":
                 logger.error(self.lang.proxyEnabledRefreshing)
@@ -626,9 +635,19 @@ class AppleIDAutomation:
 
     def login_appleid(self):
         logger.info("Start logging in AppleID")
-        try:
-            self.driver.get("https://account.apple.com/sign-in")
-        except BaseException:
+
+        # Retry page load up to 3 times for intermittent failures
+        page_loaded = False
+        for attempt in range(3):
+            try:
+                self.driver.get("https://account.apple.com/sign-in")
+                page_loaded = True
+                break
+            except BaseException as e:
+                logger.warning(f"Apple ID 登录页面加载失败 (第{attempt + 1}次): {e}")
+                if attempt < 2:
+                    time.sleep(3)
+        if not page_loaded:
             logger.error(self.lang.loginLoadFail)
             self.callbacks.update_message(self.username, self.lang.loginLoadFail)
             self.callbacks.notify(self.lang.loginLoadFail)
@@ -657,10 +676,21 @@ class AppleIDAutomation:
             ], timeout=30)
             self.driver.switch_to.frame(iframe)
         except BaseException:
-            logger.error(self.lang.loginLoadFail)
-            self.callbacks.update_message(self.username, self.lang.loginLoadFail)
-            self.callbacks.notify(self.lang.loginLoadFail)
-            return False
+            # Retry once: reload page and try again
+            logger.warning("Apple ID 登录页面 iframe 未找到，重新加载页面重试")
+            try:
+                self.driver.get("https://account.apple.com/sign-in")
+                time.sleep(3)
+                iframe = self._find_first([
+                    (By.ID, "aid-auth-widget-iFrame"),
+                    (By.TAG_NAME, "iframe"),
+                ], timeout=30)
+                self.driver.switch_to.frame(iframe)
+            except BaseException:
+                logger.error(self.lang.loginLoadFail)
+                self.callbacks.update_message(self.username, self.lang.loginLoadFail)
+                self.callbacks.notify(self.lang.loginLoadFail)
+                return False
         try:
             WebDriverWait(self.driver, 30).until(EC.element_to_be_clickable((By.ID, "account_name_text_field")))
             input_element = self.driver.find_element(By.ID, "account_name_text_field")
