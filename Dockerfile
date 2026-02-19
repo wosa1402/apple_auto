@@ -23,6 +23,7 @@ COPY . .
 
 RUN mkdir -p /app/data
 
+ENV TZ=Asia/Shanghai
 ENV CHROME_BINARY=/usr/bin/google-chrome
 ENV HEADLESS=true
 ENV HOST=0.0.0.0
