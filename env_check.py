@@ -28,6 +28,11 @@ def _run(cmd, timeout=120, shell=False):
 
 def find_chrome():
     """Try to find Chrome/Chromium binary on the system."""
+    # Check CHROME_BINARY env var first
+    env_chrome = os.environ.get("CHROME_BINARY", "").strip()
+    if env_chrome and os.path.isfile(env_chrome):
+        return env_chrome
+
     names = [
         "google-chrome-stable",
         "google-chrome",
