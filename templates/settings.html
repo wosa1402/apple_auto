@@ -103,6 +103,22 @@
                 </div>
             </div>
 
+            <div class="card mb-3">
+                <div class="card-header">代理池</div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">ProxyYoPick API 地址</label>
+                        <input type="text" name="proxy_pool_url" class="form-control"
+                               value="{{ settings.proxy_pool_url or '' }}"
+                               placeholder="http://127.0.0.1:8080">
+                        <div class="form-text">
+                            配置后，未绑定静态代理的账号将自动从代理池获取 SOCKS5 代理。
+                            留空则不启用。IP 被 Apple 封禁后会自动拉黑并换 IP 重试（最多 3 次）。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <button type="submit" class="btn btn-primary">保存设置</button>
         </form>
     </div>

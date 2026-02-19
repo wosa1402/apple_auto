@@ -41,4 +41,36 @@
         </tbody>
     </table>
 </div>
+
+<div class="d-flex justify-content-between align-items-center mb-3 mt-4">
+    <h4 class="mb-0">IP 黑名单
+        <small class="text-muted fs-6">（被 Apple 封禁的代理 IP）</small>
+    </h4>
+    {% if blacklist %}
+    <button class="btn btn-outline-danger btn-sm" id="btn-clear-blacklist">清空黑名单</button>
+    {% endif %}
+</div>
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead class="table-dark">
+            <tr>
+                <th>IP</th>
+                <th>原因</th>
+                <th>时间</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for b in blacklist %}
+            <tr>
+                <td>{{ b.ip }}</td>
+                <td>{{ b.reason }}</td>
+                <td>{{ b.created_at }}</td>
+            </tr>
+            {% endfor %}
+            {% if not blacklist %}
+            <tr><td colspan="3" class="text-center text-muted">暂无黑名单记录。</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
 {% endblock %}

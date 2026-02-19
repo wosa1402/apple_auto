@@ -175,7 +175,8 @@ def create_app():
     @login_required
     def proxy_list():
         proxies = db.list_proxies()
-        return render_template("proxy_list.html", proxies=proxies)
+        blacklist = db.list_blacklist()
+        return render_template("proxy_list.html", proxies=proxies, blacklist=blacklist)
 
     @app.route("/proxy/add", methods=["GET", "POST"])
     @login_required
@@ -207,6 +208,12 @@ def create_app():
         db.delete_proxy(proxy_id)
         return jsonify({"status": True})
 
+    @app.route("/proxy/blacklist/clear", methods=["POST"])
+    @login_required
+    def proxy_blacklist_clear():
+        db.clear_blacklist()
+        return jsonify({"status": True})
+
     # ── Records ──
 
     @app.route("/records")
@@ -224,7 +231,7 @@ def create_app():
         setting_keys = [
             "admin_password", "tg_bot_token", "tg_chat_id",
             "wx_pusher_id", "webhook_url", "webdriver_url",
-            "default_check_interval", "headless",
+            "default_check_interval", "headless", "proxy_pool_url",
         ]
         if request.method == "POST":
             for key in setting_keys:

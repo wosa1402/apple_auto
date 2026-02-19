@@ -99,6 +99,7 @@ class TaskCallbacks:
         self.config = config
         self.lang = lang_text
         self.data_dir = data_dir
+        self.proxy_was_blocked = False
 
     def update_message(self, username, message):
         try:
@@ -107,7 +108,8 @@ class TaskCallbacks:
             logger.error(f"Failed to update message: {e}")
 
     def report_proxy_error(self, proxy_id):
-        if proxy_id and proxy_id != -1:
+        self.proxy_was_blocked = True
+        if proxy_id and proxy_id > 0:
             try:
                 self.db.disable_proxy(proxy_id)
             except Exception as e:
@@ -120,11 +122,14 @@ class TaskCallbacks:
             logger.error(f"Failed to disable account: {e}")
 
     def notify(self, content):
+        proxy = self.config.proxy
+        if getattr(self.config, 'proxy_from_pool', False):
+            proxy = ""
         send_notification(
             self.config.username,
             content,
             self.config.get_notification_settings(),
-            proxy=self.config.proxy,
+            proxy=proxy,
         )
 
     def record_error(self, driver):
@@ -1353,6 +1358,33 @@ def get_ip(driver):
             return ""
 
 
+def fetch_pool_proxy(pool_url, db, pool_name="auto"):
+    """Fetch a non-blacklisted SOCKS5 proxy from ProxyYoPick API.
+
+    Returns (proxy_url, ip) tuple, e.g. ("socks5://1.2.3.4:1080", "1.2.3.4").
+    Returns ("", "") on failure.
+    """
+    try:
+        resp = get(f"{pool_url.rstrip('/')}/api/proxies",
+                   params={"pool": pool_name}, timeout=10)
+        data = resp.json()
+        proxies = data.get("proxies") or []
+        candidates = [p for p in proxies if not db.is_blacklisted(p["ip"])]
+        if not candidates:
+            logger.warning("代理池无可用代理（全部被拉黑或池为空）")
+            return "", ""
+        # Prefer US proxies, fall back to others
+        us_candidates = [p for p in candidates
+                         if (p.get("country_code") or "").upper() == "US"]
+        chosen = random.choice(us_candidates if us_candidates else candidates)
+        ip = chosen["ip"]
+        port = chosen["port"]
+        return f"socks5://{ip}:{port}", ip
+    except Exception as e:
+        logger.error(f"从代理池获取代理失败: {e}")
+        return "", ""
+
+
 def run_task(account_id, db, ocr_instance, lang_text, data_dir="data"):
     """Execute a check/unlock task for a single account. Returns True on success."""
     account = db.get_account(account_id)
@@ -1364,13 +1396,41 @@ def run_task(account_id, db, ocr_instance, lang_text, data_dir="data"):
         return False
 
     settings = db.get_all_settings()
+    pool_url = settings.get("proxy_pool_url", "").strip()
 
-    # Get proxy if assigned
+    max_proxy_retries = 3
+    for proxy_attempt in range(max_proxy_retries + 1):
+        result = _run_task_once(account_id, account, db, ocr_instance,
+                                lang_text, data_dir, settings, pool_url)
+        if result != "ip_blocked":
+            return result == "success"
+        if proxy_attempt < max_proxy_retries:
+            logger.info(f"IP 被封禁，正在换代理重试 ({proxy_attempt + 1}/{max_proxy_retries})")
+        else:
+            logger.error(f"已重试 {max_proxy_retries} 次，所有代理均被封禁")
+    return False
+
+
+def _run_task_once(account_id, account, db, ocr_instance, lang_text,
+                   data_dir, settings, pool_url):
+    """Run task once. Returns 'success', 'ip_blocked', or 'failed'."""
+
+    # Get proxy: static proxy first, then pool
     proxy_row = None
-    if account.get("proxy_id"):
+    if account.get("proxy_id") and account["proxy_id"] > 0:
         proxy_row = db.get_proxy(account["proxy_id"])
 
     config = TaskConfig(account, settings, proxy_row)
+
+    # If no static proxy and pool is configured, fetch from pool
+    if not config.proxy and pool_url:
+        pool_proxy, pool_ip = fetch_pool_proxy(pool_url, db)
+        if pool_proxy:
+            config.proxy = pool_proxy
+            config.proxy_from_pool = True
+            config.pool_ip = pool_ip
+            logger.info(f"从代理池获取代理: {pool_proxy}")
+
     callbacks = TaskCallbacks(db, account_id, config, lang_text, data_dir)
 
     logger.info(f"{lang_text.CurrentAccount}{config.username}")
@@ -1384,7 +1444,7 @@ def run_task(account_id, db, ocr_instance, lang_text, data_dir="data"):
         callbacks.notify(lang_text.failOnCallingWD)
         db.update_after_check(account_id, lang_text.failOnCallingWD)
         db.add_record(account_id, 0, lang_text.failOnCallingWD)
-        return False
+        return "failed"
 
     try:
         ip_address = get_ip(driver)
@@ -1471,6 +1531,14 @@ def run_task(account_id, db, ocr_instance, lang_text, data_dir="data"):
         except BaseException:
             logger.error(lang_text.WDCloseError)
 
+    # Check if proxy was blocked (pool proxy) — signal retry
+    if getattr(config, 'proxy_from_pool', False) and callbacks.proxy_was_blocked:
+        pool_ip = getattr(config, 'pool_ip', '')
+        if pool_ip:
+            db.add_blacklist(pool_ip, "Apple IP blocked")
+            logger.info(f"已将 {pool_ip} 加入黑名单")
+        return "ip_blocked"
+
     # Record result
     if job_success:
         db.add_record(account_id, 1, lang_text.normal, ip_address)
@@ -1482,4 +1550,4 @@ def run_task(account_id, db, ocr_instance, lang_text, data_dir="data"):
         db.add_record(account_id, 0, lang_text.missionFailed, ip_address)
         db.update_after_check(account_id, lang_text.missionFailed)
 
-    return job_success
+    return "success" if job_success else "failed"

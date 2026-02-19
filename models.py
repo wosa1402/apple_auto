@@ -67,6 +67,13 @@ class Database:
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL DEFAULT ''
             );
+
+            CREATE TABLE IF NOT EXISTS proxy_blacklist (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ip TEXT NOT NULL UNIQUE,
+                reason TEXT DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+            );
         """)
         conn.commit()
 
@@ -279,3 +286,32 @@ class Database:
         conn = self._get_conn()
         rows = conn.execute("SELECT key, value FROM settings").fetchall()
         return {r["key"]: r["value"] for r in rows}
+
+    # ── Proxy Blacklist ──
+
+    def add_blacklist(self, ip, reason=""):
+        conn = self._get_conn()
+        conn.execute(
+            "INSERT OR IGNORE INTO proxy_blacklist (ip, reason) VALUES (?, ?)",
+            (ip, reason),
+        )
+        conn.commit()
+
+    def is_blacklisted(self, ip):
+        conn = self._get_conn()
+        row = conn.execute(
+            "SELECT 1 FROM proxy_blacklist WHERE ip = ?", (ip,)
+        ).fetchone()
+        return row is not None
+
+    def list_blacklist(self):
+        conn = self._get_conn()
+        rows = conn.execute(
+            "SELECT * FROM proxy_blacklist ORDER BY id DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def clear_blacklist(self):
+        conn = self._get_conn()
+        conn.execute("DELETE FROM proxy_blacklist")
+        conn.commit()

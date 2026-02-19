@@ -67,4 +67,16 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // 清空黑名单
+    var clearBlacklistBtn = document.getElementById('btn-clear-blacklist');
+    if (clearBlacklistBtn) {
+        clearBlacklistBtn.addEventListener('click', function() {
+            if (!confirm('确定要清空所有黑名单 IP 吗？')) return;
+            fetch('/proxy/blacklist/clear', {method: 'POST'})
+                .then(function(r) { return r.json(); })
+                .then(function() { location.reload(); })
+                .catch(function() { alert('清空失败'); });
+        });
+    }
+
 });
