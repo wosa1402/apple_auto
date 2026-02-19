@@ -757,10 +757,17 @@ class AppleIDAutomation:
             self.callbacks.update_message(self.username, self.lang.answerIncorrect)
             self.callbacks.record_error(self.driver)
             return False
-        answer_inputs = self._find_all_first([
+        raw_inputs = self._find_all_first([
             (By.CSS_SELECTOR, "verify-security-questions input"),
-            (By.XPATH, "//*[contains(@class, 'input')]"),
+            (By.XPATH, "//*[contains(@class, 'question')]//input"),
+            (By.CSS_SELECTOR, "input.form-textbox-input"),
+            (By.CSS_SELECTOR, "input.generic-input-field"),
         ], timeout=10, min_count=2)
+        # Filter out password/hidden inputs to avoid filling the wrong field
+        answer_inputs = [
+            inp for inp in raw_inputs
+            if inp.get_attribute("type") not in ("password", "hidden")
+        ]
         if len(answer_inputs) < 2:
             logger.error(self.lang.answerIncorrect)
             self.callbacks.update_message(self.username, self.lang.answerIncorrect)
@@ -777,14 +784,25 @@ class AppleIDAutomation:
             (By.ID, "action"),
         ], timeout=5)
         time.sleep(5)
+        # Check if answers were rejected: .has-errors (iforgot) or questions still visible (account.apple.com)
+        answer_error = False
         try:
             self.driver.find_element(By.CLASS_NAME, "has-errors")
+            answer_error = True
         except BaseException:
             pass
-        else:
+        if not answer_error:
+            still_on_questions = len(self._find_all_first([
+                (By.CSS_SELECTOR, "verify-security-questions label"),
+                (By.XPATH, "//*[contains(@class, 'question')]"),
+            ], timeout=3, min_count=2)) >= 2
+            if still_on_questions:
+                answer_error = True
+        if answer_error:
             logger.error(self.lang.answerNotMatch)
             self.callbacks.update_message(self.username, self.lang.answerNotMatch)
             self.callbacks.notify(self.lang.answerNotMatch)
+            self.callbacks.record_error(self.driver)
             return False
         try:
             iframe = self._find_first([
