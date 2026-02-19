@@ -543,6 +543,7 @@ class AppleIDAutomation:
                 elif "Your request could not be completed because of an error" in msg:
                     logger.error(self.lang.blocked)
                     self.callbacks.update_message(self.username, self.lang.blocked)
+                    self.callbacks.report_proxy_error(self.config.proxy_id)
                     self.callbacks.notify(self.lang.blocked)
                 else:
                     logger.error(f"{self.lang.unknownError}: {msg}")
