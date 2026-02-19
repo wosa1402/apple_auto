@@ -3,3 +3,12 @@ __pycache__/
 data/
 .env
 *.db
+.git/
+.gitignore
+.venv/
+venv/
+env/
+node_modules/
+*.md
+.codespaces/
+.devcontainer/
