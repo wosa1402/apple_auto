@@ -109,6 +109,10 @@ def create_app():
         session.pop("authenticated", None)
         return redirect(url_for("login"))
 
+    @app.route("/healthz")
+    def healthz():
+        return "ok", 200
+
     @app.route("/")
     @login_required
     def dashboard():
