@@ -1,10 +1,12 @@
+import json
 import logging
 import os
+from datetime import datetime
 from functools import wraps
 
 import ddddocr
 import urllib3
-from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, Response, flash, jsonify, redirect, render_template, request, session, url_for
 
 from config import Config as AppConfig
 from env_check import check_environment
@@ -273,6 +275,167 @@ def create_app():
             env = check_environment()
         app.config["ENV_STATUS"] = env
         return jsonify({"status": True, "env": env})
+
+    @app.route("/settings/export", methods=["GET"])
+    @login_required
+    def settings_export():
+        # Build proxy id->index map
+        proxies = db.list_proxies()
+        proxy_id_to_index = {}
+        proxies_export = []
+        for idx, p in enumerate(proxies):
+            proxy_id_to_index[p["id"]] = idx
+            proxies_export.append({
+                "protocol": p["protocol"],
+                "content": p["content"],
+                "enabled": p["enabled"],
+            })
+
+        # Build accounts with _proxy_index
+        accounts_raw = db.export_accounts_raw()
+        accounts_export = []
+        for a in accounts_raw:
+            proxy_idx = proxy_id_to_index.get(a["proxy_id"]) if a["proxy_id"] else None
+            accounts_export.append({
+                "username": a["username"],
+                "password": a["password"],
+                "remark": a["remark"],
+                "dob": a["dob"],
+                "question1": a["question1"],
+                "answer1": a["answer1"],
+                "question2": a["question2"],
+                "answer2": a["answer2"],
+                "question3": a["question3"],
+                "answer3": a["answer3"],
+                "check_interval": a["check_interval"],
+                "enable_check_password_correct": a["enable_check_password_correct"],
+                "enable_delete_devices": a["enable_delete_devices"],
+                "enable_auto_update_password": a["enable_auto_update_password"],
+                "fail_retry": a["fail_retry"],
+                "enabled": a["enabled"],
+                "_proxy_index": proxy_idx,
+            })
+
+        # Gather settings (exclude admin_password)
+        all_settings = db.get_all_settings()
+        settings_export = {k: v for k, v in all_settings.items() if k != "admin_password"}
+
+        payload = {
+            "version": 1,
+            "exported_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+            "proxies": proxies_export,
+            "accounts": accounts_export,
+            "settings": settings_export,
+        }
+
+        json_str = json.dumps(payload, ensure_ascii=False, indent=2)
+        filename = f"appleid_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        return Response(
+            json_str,
+            mimetype="application/json",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+
+    @app.route("/settings/import", methods=["POST"])
+    @login_required
+    def settings_import():
+        file = request.files.get("import_file")
+        if not file or not file.filename:
+            flash("请选择要导入的文件", "danger")
+            return redirect(url_for("settings"))
+
+        try:
+            raw = file.read().decode("utf-8")
+            data = json.loads(raw)
+        except (UnicodeDecodeError, json.JSONDecodeError) as e:
+            flash(f"文件解析失败: {e}", "danger")
+            return redirect(url_for("settings"))
+
+        if not isinstance(data, dict) or "version" not in data:
+            flash("无效的备份文件格式", "danger")
+            return redirect(url_for("settings"))
+
+        if data.get("version") != 1:
+            flash(f"不支持的备份版本: {data.get('version')}", "danger")
+            return redirect(url_for("settings"))
+
+        imported_proxies = data.get("proxies", [])
+        imported_accounts = data.get("accounts", [])
+        imported_settings = data.get("settings", {})
+
+        stats = {
+            "proxies_added": 0, "proxies_skipped": 0,
+            "accounts_added": 0, "accounts_skipped": 0,
+            "settings_updated": 0,
+        }
+
+        # Import proxies — build index-to-new-id map
+        proxy_index_to_id = {}
+        for idx, p in enumerate(imported_proxies):
+            protocol = p.get("protocol", "http")
+            content = p.get("content", "")
+            if not content:
+                continue
+            existing = db.find_proxy_by_content(protocol, content)
+            if existing:
+                proxy_index_to_id[idx] = existing["id"]
+                stats["proxies_skipped"] += 1
+            else:
+                new_id = db.import_proxy({
+                    "protocol": protocol,
+                    "content": content,
+                    "enabled": p.get("enabled", 1),
+                })
+                proxy_index_to_id[idx] = new_id
+                stats["proxies_added"] += 1
+
+        # Import accounts
+        for a in imported_accounts:
+            username = a.get("username", "").strip()
+            if not username:
+                continue
+            if db.find_account_by_username(username):
+                stats["accounts_skipped"] += 1
+                continue
+
+            proxy_index = a.get("_proxy_index")
+            proxy_id = None
+            if proxy_index is not None and proxy_index in proxy_index_to_id:
+                proxy_id = proxy_index_to_id[proxy_index]
+
+            db.create_account({
+                "username": username,
+                "password": a.get("password", ""),
+                "remark": a.get("remark", ""),
+                "dob": a.get("dob", ""),
+                "question1": a.get("question1", ""),
+                "answer1": a.get("answer1", ""),
+                "question2": a.get("question2", ""),
+                "answer2": a.get("answer2", ""),
+                "question3": a.get("question3", ""),
+                "answer3": a.get("answer3", ""),
+                "check_interval": a.get("check_interval", 30),
+                "enable_check_password_correct": a.get("enable_check_password_correct", 0),
+                "enable_delete_devices": a.get("enable_delete_devices", 0),
+                "enable_auto_update_password": a.get("enable_auto_update_password", 0),
+                "fail_retry": a.get("fail_retry", 1),
+                "proxy_id": proxy_id,
+                "enabled": a.get("enabled", 1),
+            })
+            stats["accounts_added"] += 1
+
+        # Import settings (skip admin_password)
+        for key, value in imported_settings.items():
+            if key == "admin_password":
+                continue
+            db.set_setting(key, str(value))
+            stats["settings_updated"] += 1
+
+        msg = (f"导入完成: 代理 +{stats['proxies_added']} (跳过 {stats['proxies_skipped']}), "
+               f"账号 +{stats['accounts_added']} (跳过 {stats['accounts_skipped']}), "
+               f"设置 {stats['settings_updated']} 项")
+        flash(msg, "success")
+        return redirect(url_for("settings"))
 
     # ── API for dashboard auto-refresh ──
 

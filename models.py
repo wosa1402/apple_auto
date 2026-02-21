@@ -93,6 +93,24 @@ class Database:
         row = conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone()
         return dict(row) if row else None
 
+    def find_account_by_username(self, username):
+        conn = self._get_conn()
+        row = conn.execute(
+            "SELECT * FROM accounts WHERE username = ?", (username,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def export_accounts_raw(self):
+        conn = self._get_conn()
+        rows = conn.execute(
+            """SELECT id, username, password, remark, dob,
+                      question1, answer1, question2, answer2, question3, answer3,
+                      check_interval, enable_check_password_correct, enable_delete_devices,
+                      enable_auto_update_password, fail_retry, proxy_id, enabled
+               FROM accounts ORDER BY id"""
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def create_account(self, data):
         conn = self._get_conn()
         conn.execute(
@@ -232,6 +250,23 @@ class Database:
         conn.execute("UPDATE accounts SET proxy_id = NULL WHERE proxy_id = ?", (proxy_id,))
         conn.execute("DELETE FROM proxies WHERE id = ?", (proxy_id,))
         conn.commit()
+
+    def find_proxy_by_content(self, protocol, content):
+        conn = self._get_conn()
+        row = conn.execute(
+            "SELECT * FROM proxies WHERE protocol = ? AND content = ?",
+            (protocol, content),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def import_proxy(self, data):
+        conn = self._get_conn()
+        cursor = conn.execute(
+            "INSERT INTO proxies (protocol, content, enabled) VALUES (?,?,?)",
+            (data["protocol"], data["content"], int(data.get("enabled", 1))),
+        )
+        conn.commit()
+        return cursor.lastrowid
 
     def disable_proxy(self, proxy_id):
         conn = self._get_conn()
