@@ -1421,6 +1421,13 @@ def run_task(account_id, db, ocr_instance, lang_text, data_dir="data"):
     for proxy_attempt in range(max_proxy_retries + 1):
         result = _run_task_once(account_id, account, db, ocr_instance,
                                 lang_text, data_dir, settings, pool_url)
+        if result == "proxy_dead":
+            if proxy_attempt < max_proxy_retries:
+                logger.info(f"代理不可用，正在换代理重试 ({proxy_attempt + 1}/{max_proxy_retries})")
+                continue
+            else:
+                logger.error(f"已重试 {max_proxy_retries} 次，所有代理均不可用")
+                return False
         if result != "ip_blocked":
             return result == "success"
         if proxy_attempt < max_proxy_retries:
@@ -1432,7 +1439,7 @@ def run_task(account_id, db, ocr_instance, lang_text, data_dir="data"):
 
 def _run_task_once(account_id, account, db, ocr_instance, lang_text,
                    data_dir, settings, pool_url):
-    """Run task once. Returns 'success', 'ip_blocked', or 'failed'."""
+    """Run task once. Returns 'success', 'ip_blocked', 'proxy_dead', or 'failed'."""
 
     # Get proxy: static proxy first, then pool
     proxy_row = None
@@ -1459,6 +1466,10 @@ def _run_task_once(account_id, account, db, ocr_instance, lang_text,
     ip_address = ""
 
     if not driver:
+        # Pool proxy may cause WebDriver startup failure — retry with another
+        if getattr(config, 'proxy_from_pool', False):
+            logger.warning(f"代理 {config.proxy} 导致 WebDriver 启动失败，跳过")
+            return "proxy_dead"
         callbacks.update_message(config.username, lang_text.failOnCallingWD)
         callbacks.notify(lang_text.failOnCallingWD)
         db.update_after_check(account_id, lang_text.failOnCallingWD)
@@ -1467,6 +1478,13 @@ def _run_task_once(account_id, account, db, ocr_instance, lang_text,
 
     try:
         ip_address = get_ip(driver)
+
+        # Pool proxy connectivity check: can't get IP means proxy is dead
+        if not ip_address and getattr(config, 'proxy_from_pool', False):
+            logger.warning(f"代理 {config.proxy} 无法连接，跳过")
+            driver.quit()
+            return "proxy_dead"
+
         aid = AppleIDAutomation(config, driver, ocr_instance, lang_text, callbacks)
 
         if aid.login():
