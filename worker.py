@@ -745,7 +745,8 @@ class AppleIDAutomation:
             return False
         question_element = self._find_all_first([
             (By.CSS_SELECTOR, "verify-security-questions label"),
-            (By.XPATH, "//*[contains(@class, 'question')]"),
+            (By.CSS_SELECTOR, "div.sa-sk7__question"),
+            (By.CSS_SELECTOR, "div[id^='question-']"),
         ], timeout=20, min_count=2)
         if len(question_element) < 2:
             self.driver.switch_to.default_content()
@@ -760,7 +761,7 @@ class AppleIDAutomation:
             return False
         raw_inputs = self._find_all_first([
             (By.CSS_SELECTOR, "verify-security-questions input"),
-            (By.XPATH, "//*[contains(@class, 'question')]//input"),
+            (By.CSS_SELECTOR, "div.sa-sk7__security-questions input.form-textbox-input"),
             (By.CSS_SELECTOR, "input.form-textbox-input"),
             (By.CSS_SELECTOR, "input.generic-input-field"),
         ], timeout=10, min_count=2)
@@ -796,7 +797,8 @@ class AppleIDAutomation:
         if not answer_error:
             still_on_questions = len(self._find_all_first([
                 (By.CSS_SELECTOR, "verify-security-questions label"),
-                (By.XPATH, "//*[contains(@class, 'question')]"),
+                (By.CSS_SELECTOR, "div.sa-sk7__question"),
+                (By.CSS_SELECTOR, "div[id^='question-']"),
             ], timeout=3, min_count=2)) >= 2
             if still_on_questions:
                 answer_error = True
