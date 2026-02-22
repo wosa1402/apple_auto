@@ -764,10 +764,11 @@ class AppleIDAutomation:
             (By.CSS_SELECTOR, "input.form-textbox-input"),
             (By.CSS_SELECTOR, "input.generic-input-field"),
         ], timeout=10, min_count=2)
-        # Filter out password/hidden inputs to avoid filling the wrong field
+        # Filter out hidden inputs to avoid filling the wrong field
+        # Note: Apple now uses type="password" for security question answers
         answer_inputs = [
             inp for inp in raw_inputs
-            if inp.get_attribute("type") not in ("password", "hidden")
+            if inp.get_attribute("type") not in ("hidden",)
         ]
         if len(answer_inputs) < 2:
             logger.error(self.lang.answerIncorrect)
