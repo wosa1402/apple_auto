@@ -272,6 +272,20 @@ class AppleIDAutomation:
             time.sleep(2)
         except BaseException:
             pass
+
+    def _is_apple_account_sign_in_page(self):
+        """Best-effort check whether we are still on account.apple.com sign-in."""
+        try:
+            url = self.driver.current_url or ""
+        except BaseException:
+            url = ""
+        if "/sign-in" in url:
+            return True
+        return self._has_any([
+            (By.ID, "aid-auth-widget-iFrame"),
+            (By.ID, "account_name_text_field"),
+            (By.CSS_SELECTOR, "input[autocomplete='username']"),
+        ])
         # Also dismiss nav-cancel if still present
         try:
             cancel = self.driver.find_element(By.CLASS_NAME, "nav-cancel")
@@ -752,9 +766,8 @@ class AppleIDAutomation:
             self.callbacks.record_error(self.driver)
             return False
 
-        # Find login form: try main page first, fall back to iframe
-        # Apple's new account.apple.com renders the login form directly on
-        # the page; iframe-based login no longer sets session cookies properly.
+        # Find login form: try main page first, fall back to iframe.
+        # Note: iframe-based login may fail to establish session in some cases.
         in_iframe = False
         try:
             input_element = self._find_first([
@@ -778,6 +791,7 @@ class AppleIDAutomation:
                 logger.error(self.lang.loginLoadFail)
                 self.callbacks.update_message(self.username, self.lang.loginLoadFail)
                 self.callbacks.notify(self.lang.loginLoadFail)
+                self.callbacks.record_error(self.driver)
                 return False
 
         # Enter username
@@ -844,13 +858,19 @@ class AppleIDAutomation:
             pass
         else:
             logger.error(f"{self.lang.LoginFail}\n{msg.strip()}")
+            self.callbacks.update_message(self.username, self.lang.LoginFail)
+            self.callbacks.notify(self.lang.LoginFail)
+            self.callbacks.record_error(self.driver)
             return False
-        # Also check for main page error indicators
+        # Also check for error indicators on main page
         if not in_iframe:
             try:
                 err_el = self.driver.find_element(By.CSS_SELECTOR, "[role='alert']")
                 if err_el.is_displayed():
                     logger.error(f"{self.lang.LoginFail}\n{err_el.text.strip()}")
+                    self.callbacks.update_message(self.username, self.lang.LoginFail)
+                    self.callbacks.notify(self.lang.LoginFail)
+                    self.callbacks.record_error(self.driver)
                     return False
             except BaseException:
                 pass
@@ -858,7 +878,14 @@ class AppleIDAutomation:
         # Early return if delete_devices not enabled
         if not self.config.enable_delete_devices:
             if in_iframe:
-                self.driver.switch_to.default_content()
+                try:
+                    self._dismiss_iframe_prompts()
+                except BaseException:
+                    pass
+                try:
+                    self.driver.switch_to.default_content()
+                except BaseException:
+                    pass
             logger.info(self.lang.login)
             return True
 
@@ -869,13 +896,18 @@ class AppleIDAutomation:
             (By.CSS_SELECTOR, "div[id^='question-']"),
         ], timeout=20, min_count=2)
         if len(question_element) < 2:
-            # No security questions found.
-            # For accounts without 2FA, Apple may show a 2FA enrollment
-            # prompt that blocks the auth code from being sent via
-            # postMessage. Dismiss it before switching to default content.
             if in_iframe:
-                self._dismiss_iframe_prompts()
-                self.driver.switch_to.default_content()
+                # For accounts without 2FA, Apple may show a 2FA enrollment
+                # prompt that blocks the auth code from being sent via
+                # postMessage. Dismiss it before switching to default content.
+                try:
+                    self._dismiss_iframe_prompts()
+                except BaseException:
+                    pass
+                try:
+                    self.driver.switch_to.default_content()
+                except BaseException:
+                    pass
             # Wait for page to transition to authenticated state
             try:
                 WebDriverWait(self.driver, 30).until(
@@ -883,6 +915,12 @@ class AppleIDAutomation:
                 )
             except BaseException:
                 pass
+            if self._is_apple_account_sign_in_page():
+                logger.error(self.lang.LoginFail)
+                self.callbacks.update_message(self.username, self.lang.LoginFail)
+                self.callbacks.notify(self.lang.LoginFail)
+                self.callbacks.record_error(self.driver)
+                return False
             logger.info(self.lang.login)
             return True
 
@@ -944,10 +982,15 @@ class AppleIDAutomation:
             self.callbacks.record_error(self.driver)
             return False
 
-        # Post-security-questions handling
         if in_iframe:
-            self._dismiss_iframe_prompts()
-            self.driver.switch_to.default_content()
+            try:
+                self._dismiss_iframe_prompts()
+            except BaseException:
+                pass
+            try:
+                self.driver.switch_to.default_content()
+            except BaseException:
+                pass
 
         # Wait for auth to complete and page to transition
         try:
@@ -956,6 +999,12 @@ class AppleIDAutomation:
             )
         except BaseException:
             pass
+        if self._is_apple_account_sign_in_page():
+            logger.error(self.lang.LoginFail)
+            self.callbacks.update_message(self.username, self.lang.LoginFail)
+            self.callbacks.notify(self.lang.LoginFail)
+            self.callbacks.record_error(self.driver)
+            return False
         logger.info(self.lang.login)
         return True
 
@@ -963,6 +1012,16 @@ class AppleIDAutomation:
         logger.info(self.lang.startRemoving)
         devices_url = "https://account.apple.com/account/manage/section/devices"
         self.driver.get(devices_url)
+        try:
+            time.sleep(2)
+            if self._is_apple_account_sign_in_page():
+                logger.error(self.lang.LoginFail)
+                self.callbacks.update_message(self.username, self.lang.LoginFail)
+                self.callbacks.notify(self.lang.LoginFail)
+                self.callbacks.record_error(self.driver)
+                return False
+        except BaseException:
+            pass
 
         try:
             WebDriverWait(self.driver, 30).until(lambda d: d.execute_script("return document.readyState") == "complete")
