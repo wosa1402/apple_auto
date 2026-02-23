@@ -682,42 +682,62 @@ class AppleIDAutomation:
             self.callbacks.notify(self.lang.seeLog)
             self.callbacks.record_error(self.driver)
             return False
+
+        # Find login form: try main page first, fall back to iframe
+        # Apple's new account.apple.com renders the login form directly on
+        # the page; iframe-based login no longer sets session cookies properly.
+        in_iframe = False
         try:
-            iframe = self._find_first([
-                (By.ID, "aid-auth-widget-iFrame"),
-                (By.TAG_NAME, "iframe"),
-            ], timeout=30)
-            self.driver.switch_to.frame(iframe)
+            input_element = self._find_first([
+                (By.ID, "account_name_text_field"),
+                (By.CSS_SELECTOR, "input[placeholder*='Email']"),
+                (By.CSS_SELECTOR, "input[placeholder*='email']"),
+                (By.CSS_SELECTOR, "input[autocomplete='username']"),
+            ], timeout=10, clickable=True)
         except BaseException:
-            # Retry once: reload page and try again
-            logger.warning("Apple ID 登录页面 iframe 未找到，重新加载页面重试")
+            # Main page form not found, try iframe as fallback
             try:
-                self.driver.get("https://account.apple.com/sign-in")
-                time.sleep(3)
                 iframe = self._find_first([
                     (By.ID, "aid-auth-widget-iFrame"),
-                    (By.TAG_NAME, "iframe"),
-                ], timeout=30)
+                ], timeout=15)
                 self.driver.switch_to.frame(iframe)
+                in_iframe = True
+                input_element = WebDriverWait(self.driver, 30).until(
+                    EC.element_to_be_clickable((By.ID, "account_name_text_field"))
+                )
             except BaseException:
                 logger.error(self.lang.loginLoadFail)
                 self.callbacks.update_message(self.username, self.lang.loginLoadFail)
                 self.callbacks.notify(self.lang.loginLoadFail)
                 return False
+
+        # Enter username
         try:
-            WebDriverWait(self.driver, 30).until(EC.element_to_be_clickable((By.ID, "account_name_text_field")))
-            input_element = self.driver.find_element(By.ID, "account_name_text_field")
             for char in self.username:
                 input_element.send_keys(char)
-            input_element.send_keys(Keys.ENTER)
+            if in_iframe:
+                input_element.send_keys(Keys.ENTER)
+            else:
+                # Main page: click Continue button after entering email
+                time.sleep(1)
+                try:
+                    self._click_first([
+                        (By.XPATH, "//button[contains(text(),'Continue')]"),
+                        (By.XPATH, "//button[contains(text(),'继续')]"),
+                        (By.CSS_SELECTOR, "button[type='submit']"),
+                    ], timeout=5)
+                except BaseException:
+                    input_element.send_keys(Keys.ENTER)
         except BaseException:
             logger.error(self.lang.failOnLoadingPage)
             self.callbacks.update_message(self.username, self.lang.failOnLoadingPage)
             self.callbacks.notify(self.lang.failOnLoadingPage)
             self.callbacks.record_error(self.driver)
             return False
+
+        # Find and enter password
         try:
-            if self._click_first([(By.ID, "continue-password")], timeout=2):
+            if in_iframe and self._click_first([(By.ID, "continue-password")], timeout=2):
                 time.sleep(1)
             input_element = self._find_first([
                 (By.ID, "password_text_field"),
@@ -732,25 +752,58 @@ class AppleIDAutomation:
         for char in self.password:
             input_element.send_keys(char)
         time.sleep(1)
-        input_element.send_keys(Keys.ENTER)
+        if in_iframe:
+            input_element.send_keys(Keys.ENTER)
+        else:
+            # Main page: click Sign In / Continue button
+            try:
+                self._click_first([
+                    (By.XPATH, "//button[contains(text(),'Sign In')]"),
+                    (By.XPATH, "//button[contains(text(),'Continue')]"),
+                    (By.XPATH, "//button[contains(text(),'登录')]"),
+                    (By.XPATH, "//button[contains(text(),'继续')]"),
+                    (By.CSS_SELECTOR, "button[type='submit']"),
+                ], timeout=5)
+            except BaseException:
+                input_element.send_keys(Keys.ENTER)
         time.sleep(5)
+
+        # Check for error message
         try:
             msg = self.driver.find_element(By.ID, "errMsg").get_attribute("innerHTML")
         except BaseException:
-            if not self.config.enable_delete_devices:
-                logger.info(self.lang.login)
-                return True
+            pass
         else:
             logger.error(f"{self.lang.LoginFail}\n{msg.strip()}")
             return False
+        # Also check for main page error indicators
+        if not in_iframe:
+            try:
+                err_el = self.driver.find_element(By.CSS_SELECTOR, "[role='alert']")
+                if err_el.is_displayed():
+                    logger.error(f"{self.lang.LoginFail}\n{err_el.text.strip()}")
+                    return False
+            except BaseException:
+                pass
+
+        # Early return if delete_devices not enabled
+        if not self.config.enable_delete_devices:
+            if in_iframe:
+                self.driver.switch_to.default_content()
+            logger.info(self.lang.login)
+            return True
+
+        # Look for security questions (may appear after login on either page)
         question_element = self._find_all_first([
             (By.CSS_SELECTOR, "verify-security-questions label"),
             (By.CSS_SELECTOR, "div.sa-sk7__question"),
             (By.CSS_SELECTOR, "div[id^='question-']"),
         ], timeout=20, min_count=2)
         if len(question_element) < 2:
-            self.driver.switch_to.default_content()
-            # Wait for auth callback to complete and page to transition
+            # No security questions - login complete
+            if in_iframe:
+                self.driver.switch_to.default_content()
+            # Wait for page to transition to authenticated state
             try:
                 WebDriverWait(self.driver, 30).until(
                     lambda d: "/sign-in" not in d.current_url
@@ -759,6 +812,8 @@ class AppleIDAutomation:
                 pass
             logger.info(self.lang.login)
             return True
+
+        # Answer security questions
         answer0 = self.get_answer(question_element[0].get_attribute("innerHTML"))
         answer1 = self.get_answer(question_element[1].get_attribute("innerHTML"))
         if answer0 == "" or answer1 == "":
@@ -815,25 +870,30 @@ class AppleIDAutomation:
             self.callbacks.notify(self.lang.answerNotMatch)
             self.callbacks.record_error(self.driver)
             return False
-        try:
-            iframe = self._find_first([
-                (By.ID, "aid-auth-widget-iFrame"),
-                (By.TAG_NAME, "iframe"),
-            ], timeout=10)
-            self.driver.switch_to.frame(iframe)
-        except BaseException:
-            logger.error(self.lang.failOnBypass2FA)
-            self.callbacks.record_error(self.driver)
-            return False
-        try:
-            WebDriverWait(self.driver, 5).until(EC.presence_of_element_located((By.XPATH,
-                                                                               "/html/body/div[1]/appleid-repair/idms-widget/div/div/div/hsa2-enrollment-flow/div/div/idms-step/div/div/div/div[3]/idms-toolbar/div/div[1]/div/button[2]"))).click()
-            self.driver.find_element(By.CLASS_NAME, "nav-cancel").click()
-            WebDriverWait(self.driver, 5).until_not(EC.presence_of_element_located((By.CLASS_NAME, "nav-cancel")))
-        except BaseException:
-            pass
-        self.driver.switch_to.default_content()
-        # Wait for auth callback to complete and page to transition
+
+        # Post-security-questions handling
+        if in_iframe:
+            # Old iframe flow: handle 2FA enrollment bypass
+            try:
+                iframe = self._find_first([
+                    (By.ID, "aid-auth-widget-iFrame"),
+                    (By.TAG_NAME, "iframe"),
+                ], timeout=10)
+                self.driver.switch_to.frame(iframe)
+            except BaseException:
+                logger.error(self.lang.failOnBypass2FA)
+                self.callbacks.record_error(self.driver)
+                return False
+            try:
+                WebDriverWait(self.driver, 5).until(EC.presence_of_element_located((By.XPATH,
+                                                                                   "/html/body/div[1]/appleid-repair/idms-widget/div/div/div/hsa2-enrollment-flow/div/div/idms-step/div/div/div/div[3]/idms-toolbar/div/div[1]/div/button[2]"))).click()
+                self.driver.find_element(By.CLASS_NAME, "nav-cancel").click()
+                WebDriverWait(self.driver, 5).until_not(EC.presence_of_element_located((By.CLASS_NAME, "nav-cancel")))
+            except BaseException:
+                pass
+            self.driver.switch_to.default_content()
+
+        # Wait for auth to complete and page to transition
         try:
             WebDriverWait(self.driver, 30).until(
                 lambda d: "/sign-in" not in d.current_url
