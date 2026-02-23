@@ -214,6 +214,35 @@ class AppleIDAutomation:
         except BaseException:
             return False
 
+    def _dismiss_iframe_prompts(self):
+        """Dismiss 2FA enrollment or other blocking prompts inside the auth iframe.
+
+        After password validation, Apple may show a 2FA enrollment prompt for
+        accounts without 2FA. This blocks the OAuth postMessage from being sent
+        to the parent page, preventing session establishment.
+        """
+        # Try to click "Not Now" / skip / dismiss buttons
+        try:
+            self._click_first([
+                (By.XPATH, "//button[contains(text(),'Not Now')]"),
+                (By.XPATH, "//a[contains(text(),'Not Now')]"),
+                (By.XPATH, "//button[contains(text(),'Remind Me Later')]"),
+                (By.XPATH, "//button[contains(@class,'nav-action')]"),
+            ], timeout=10)
+            time.sleep(2)
+        except BaseException:
+            pass
+        # Also dismiss nav-cancel if still present
+        try:
+            cancel = self.driver.find_element(By.CLASS_NAME, "nav-cancel")
+            if cancel.is_displayed():
+                cancel.click()
+                WebDriverWait(self.driver, 5).until_not(
+                    EC.presence_of_element_located((By.CLASS_NAME, "nav-cancel"))
+                )
+        except BaseException:
+            pass
+
     def _find_dob_input(self, timeout=5):
         locators = [
             (By.CSS_SELECTOR, "masked-date#birthDate input"),
@@ -800,8 +829,12 @@ class AppleIDAutomation:
             (By.CSS_SELECTOR, "div[id^='question-']"),
         ], timeout=20, min_count=2)
         if len(question_element) < 2:
-            # No security questions - login complete
+            # No security questions found.
+            # For accounts without 2FA, Apple may show a 2FA enrollment
+            # prompt that blocks the auth code from being sent via
+            # postMessage. Dismiss it before switching to default content.
             if in_iframe:
+                self._dismiss_iframe_prompts()
                 self.driver.switch_to.default_content()
             # Wait for page to transition to authenticated state
             try:
@@ -873,24 +906,7 @@ class AppleIDAutomation:
 
         # Post-security-questions handling
         if in_iframe:
-            # Old iframe flow: handle 2FA enrollment bypass
-            try:
-                iframe = self._find_first([
-                    (By.ID, "aid-auth-widget-iFrame"),
-                    (By.TAG_NAME, "iframe"),
-                ], timeout=10)
-                self.driver.switch_to.frame(iframe)
-            except BaseException:
-                logger.error(self.lang.failOnBypass2FA)
-                self.callbacks.record_error(self.driver)
-                return False
-            try:
-                WebDriverWait(self.driver, 5).until(EC.presence_of_element_located((By.XPATH,
-                                                                                   "/html/body/div[1]/appleid-repair/idms-widget/div/div/div/hsa2-enrollment-flow/div/div/idms-step/div/div/div/div[3]/idms-toolbar/div/div[1]/div/button[2]"))).click()
-                self.driver.find_element(By.CLASS_NAME, "nav-cancel").click()
-                WebDriverWait(self.driver, 5).until_not(EC.presence_of_element_located((By.CLASS_NAME, "nav-cancel")))
-            except BaseException:
-                pass
+            self._dismiss_iframe_prompts()
             self.driver.switch_to.default_content()
 
         # Wait for auth to complete and page to transition
