@@ -750,6 +750,13 @@ class AppleIDAutomation:
         ], timeout=20, min_count=2)
         if len(question_element) < 2:
             self.driver.switch_to.default_content()
+            # Wait for auth callback to complete and page to transition
+            try:
+                WebDriverWait(self.driver, 30).until(
+                    lambda d: "/sign-in" not in d.current_url
+                )
+            except BaseException:
+                pass
             logger.info(self.lang.login)
             return True
         answer0 = self.get_answer(question_element[0].get_attribute("innerHTML"))
@@ -826,6 +833,13 @@ class AppleIDAutomation:
         except BaseException:
             pass
         self.driver.switch_to.default_content()
+        # Wait for auth callback to complete and page to transition
+        try:
+            WebDriverWait(self.driver, 30).until(
+                lambda d: "/sign-in" not in d.current_url
+            )
+        except BaseException:
+            pass
         logger.info(self.lang.login)
         return True
 
