@@ -1,5 +1,6 @@
 import base64
 import datetime
+import json
 import logging
 import os
 import random
@@ -7,6 +8,7 @@ import re
 import string
 import time
 import traceback
+from urllib.parse import urlsplit, urlunsplit
 
 from requests import get
 from selenium import webdriver
@@ -136,7 +138,45 @@ class TaskCallbacks:
         error_dir = os.path.join(self.data_dir, "errors", str(self.account_id))
         os.makedirs(error_dir, exist_ok=True)
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        current_url = ""
+        current_url_sanitized = ""
+        title = ""
+        ready_state = ""
         try:
+            current_url = driver.current_url or ""
+        except BaseException:
+            current_url = ""
+        if current_url:
+            try:
+                parts = urlsplit(current_url)
+                current_url_sanitized = urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+            except BaseException:
+                current_url_sanitized = current_url
+        try:
+            title = driver.title or ""
+        except BaseException:
+            title = ""
+        try:
+            ready_state = driver.execute_script("return document.readyState") or ""
+        except BaseException:
+            ready_state = ""
+        if current_url_sanitized or title:
+            logger.error(f"错误快照信息: title={title!r}, url={current_url_sanitized}")
+        try:
+            meta_path = os.path.join(error_dir, f"{ts}_meta.json")
+            with open(meta_path, "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "timestamp": ts,
+                        "title": title,
+                        "current_url": current_url,
+                        "current_url_sanitized": current_url_sanitized,
+                        "ready_state": ready_state,
+                    },
+                    f,
+                    ensure_ascii=False,
+                    indent=2,
+                )
             with open(os.path.join(error_dir, f"{ts}_error.html"), "w", encoding="utf-8") as f:
                 f.write(driver.page_source)
             driver.save_screenshot(os.path.join(error_dir, f"{ts}_error.png"))
